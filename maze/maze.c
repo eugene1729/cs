@@ -75,13 +75,13 @@ main (
         exit(1);
     }
     n = atoi(argv[1]);
-    if (n < 1 || n > 9) {
-        printf("ERROR: N needs to be between 1 and 9.\n");
+    if (n < 1 || n > 19) {
+        printf("ERROR: N needs to be between 1 and 19.\n");
         exit(1);
     }
     k = atoi(argv[2]);
-    if (k < 1 || k > 9) {
-        printf("ERROR: K needs to be between 1 and 9.\n");
+    if (k < 1 || k > 19) {
+        printf("ERROR: K needs to be between 1 and 19.\n");
         exit(1);
     }
 

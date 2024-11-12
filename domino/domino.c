@@ -1,11 +1,12 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <gmp.h>
 
-#define VERBOSE     1
-
+int verbose;
+int skip_zeros;
 unsigned int n;
 unsigned int m;
 unsigned int t;
@@ -13,12 +14,11 @@ unsigned int ti;
 
 int** cyclotomics;
 
-#if VERBOSE
 unsigned int num_polynomials_multiplied;
 unsigned int num_polynomials_to_multiply;
+clock_t total_start_time;
 clock_t start_time;
 clock_t time_;
-#endif
 
 unsigned int
 gcd (
@@ -90,7 +90,6 @@ typedef struct {
     unsigned int power_of_2;
 } POLYNOMIAL_PRODUCT;
 
-#if VERBOSE
 void
 update_multiplying_polynomials_status ()
 
@@ -103,7 +102,6 @@ update_multiplying_polynomials_status ()
         time_ = now;
     }
 }
-#endif
 
 void
 swap_polynomials (
@@ -126,7 +124,7 @@ multiply_by_polynomial (
 {
     unsigned int p_exp;
 
-    // When i == j, polynomial has form [4, ..., 2..., 2, ...], then factor out 2 and multiply by power of 2 at the end.
+    // When i == j, polynomial has form [4, ..., 2, ..., 2, ...], then factor out 2 and multiply by power of 2 at the end.
     if (j == k) {
         pp->power_of_2++;
         p_exp = 1;
@@ -163,9 +161,9 @@ multiply_by_polynomial (
 
     swap_polynomials(pp);
 
-#if VERBOSE
-    update_multiplying_polynomials_status();
-#endif
+    if (verbose) {
+        update_multiplying_polynomials_status();
+    }
 }
 
 void
@@ -196,9 +194,9 @@ square_polynomial (
 
     swap_polynomials(pp);
 
-#if VERBOSE
-    update_multiplying_polynomials_status();
-#endif
+    if (verbose) {
+        update_multiplying_polynomials_status();
+    }
 }
 
 int
@@ -208,30 +206,81 @@ main (
     )
 
 {
-    // Initialize from command line parameters.
-    if (argc != 2 && argc != 3) {
-        printf("ERROR: Required parameters are missing.\n");
-        return 1;
-    }
-    n = atoi(argv[1]);
-    if (n < 1) {
-        printf("ERROR: N is required.\n");
-        return 1;
-    }
+    unsigned int m_min = 0;
+    unsigned int m_max = 0;
+    char* output_file_name = NULL;
 
-    unsigned int m_min;
-    unsigned int m_max;
+    for (int i = 1; i < argc; i++) {
 
-    if (argc == 3) {
-        m_max = m_min = atoi(argv[2]);
-        if (m_max < 1) {
-            printf("ERROR: Invalid M.\n");
+        char* arg = argv[i];
+
+        if (arg[0] == '-') {
+            if (i < argc - 1 && strcmp(arg, "--min") == 0) {
+                m_min = atoi(argv[++i]);
+                if (m_min < 1) {
+                    printf("ERROR: Minimum M is invalid.\n");
+                    return 1;
+                }
+                continue;
+            }
+            else if (i < argc - 1 && (strcmp(arg, "-m") == 0 || strcmp(arg, "--max") == 0)) {
+                m_max = atoi(argv[++i]);
+                if (m_max < 1) {
+                    printf("ERROR: Maximum M is invalid.\n");
+                    return 1;
+                }
+                continue;
+            }
+            else if (i < argc - 1 && (strcmp(arg, "-o") == 0 || strcmp(arg, "--output") == 0)) {
+                output_file_name = argv[++i];
+                continue;
+            }
+            else if (strcmp(arg, "-v") == 0 || strcmp(arg, "--verbose") == 0) {
+                verbose = 1;
+                continue;
+            }
+            else if (strcmp(arg, "--skip-zeros") == 0) {
+                skip_zeros = 1;
+                continue;
+            }
+            printf("ERROR: Unexpected option '%s'.\n", arg);
             return 1;
         }
+        else if (n == 0) {
+            n = atoi(arg);
+            if (n < 1) {
+                printf("ERROR: N is invalid.\n");
+                return 1;
+            }
+            continue;
+        }
+        else if (m_min == 0) {
+            m_max = m_min = atoi(arg);
+            if (m_max < 1) {
+                printf("ERROR: M is invalid.\n");
+                return 1;
+            }
+            continue;
+        }
+
+        printf("ERROR: Unexpected argument '%s'.\n", arg);
+        return 1;
     }
-    else {
+
+    if (m_min == 0) {
         m_min = 1;
-        m_max = 65536;
+    }
+    if (m_max == 0) {
+        m_max = 1000;
+    }
+
+    FILE* output = NULL;
+    if (output_file_name != NULL) {
+        output = fopen(output_file_name, "w");
+    }
+
+    if (verbose) {
+        total_start_time = clock();
     }
 
     unsigned int max_t = (n + 1) * (m_max + 1);
@@ -241,16 +290,21 @@ main (
 
         // Handle special case of odd N and odd M.
         if (n % 2 == 1 && m % 2 == 1) {
-            if (m_min != m_max) {
-                printf("%u\t", m);
+            if (!skip_zeros) {
+                if (m_min != m_max) {
+                    printf("%u\t", m);
+                }
+                printf("0\n");
+                if (output != NULL) {
+                    fprintf(output, "0\n");
+                }
             }
-            printf("0\n");
             continue;
         }
 
-#if VERBOSE
-        time_ = start_time = clock();
-#endif
+        if (verbose) {
+            time_ = start_time = clock();
+        }
 
         /*
             Kasteleyn formula is 
@@ -268,10 +322,10 @@ main (
         ti = gcd(n + 1, m + 1);
         t = (n + 1) * (m + 1) / ti;
 
-#if VERBOSE
-        printf("Polynomial degree: %u.\n", t);
-        num_polynomials_multiplied = 0;
-#endif
+        if (verbose) {
+            printf("Polynomial degree: %u.\n", t);
+            num_polynomials_multiplied = 0;
+        }
 
         mpz_t* p1 = malloc(t * sizeof(mpz_t));
         mpz_t* p2 = malloc(t * sizeof(mpz_t));
@@ -287,7 +341,9 @@ main (
         mpz_set_ui(pp.p[0], 1);
 
         if (square) {
-            num_polynomials_to_multiply = ((n + 1) / 2 - 1) * ((n + 1) / 2) / 2 + (n + 1) / 2 + 1;
+            if (verbose) {
+                num_polynomials_to_multiply = ((n + 1) / 2 - 1) * ((n + 1) / 2) / 2 + (n + 1) / 2 + 1;
+            }
             // Lower triangle.
             for (unsigned int j = 2; j <= t / 2; j++) {
                 for (unsigned int k = 1; k < j; k++) {
@@ -303,7 +359,9 @@ main (
         }
 
         else {
-            num_polynomials_to_multiply = ((m + 1) / 2) * ((n + 1) / 2); // Not the same as t / 4.
+            if (verbose) {
+                num_polynomials_to_multiply = ((m + 1) / 2) * ((n + 1) / 2); // Not the same as t / 4.
+            }
             unsigned int ji = (n + 1) / ti;
             unsigned int ki = (m + 1) / ti;
             for (unsigned int j = ji; j <= t / 2; j += ji) {
@@ -313,22 +371,21 @@ main (
             }
         }
 
-#if VERBOSE
-        printf("\rMultiplying polynomials... %.3f sec.%10s\n", (double) (clock() - start_time) / CLOCKS_PER_SEC, "");
-        printf("Calculating cyclotomic polynomial...");
-        fflush(stdout);
-        start_time = clock();
-#endif
+        if (verbose) {
+            printf("\rMultiplying polynomials... %.3f sec.%10s\n", (double) (clock() - start_time) / CLOCKS_PER_SEC, "");
+            printf("Calculating cyclotomic polynomial...");
+            fflush(stdout);
+            start_time = clock();
+        }
 
         /*
-            We now have a polynomial P(x). r = P(z). r is an integer and is the answer we are looking for.
-            By Little Bezout's theorem, r is the remainder from dividing P(x) by x-z. P(x) = Q(x)(x-z) + r.
-            In fact P(z^j) = P(z) = r for any z^j where j is coprime with t. 
-            This is because of the structure of polynomials we multiplied in the first step.
-            Product of all z^i where i is in [1 .. t-1] and i is coprime with t is 
-            t-th cyclotomic polynomial \Phi_{t}(x) that has all integer coefficients. 
-            So the answer is the remainder from division of P(x) by \Phi_{t}(x). 
-            Two polynomials with integer coefficients.
+            We now have a polynomial P(x). r = P(z) is an integer and is the answer we are looking
+            for. By Little Bezout's theorem, r is the remainder from dividing P(x) by x-z. 
+            P(x) = Q(x)(x-z) + r. In fact P(z^j) = P(z) = r for any z^j where j is coprime with t
+            because of the structure of polynomials we multiplied in the first step. Product of all
+            z^i where i is in [1 .. t-1] and i is coprime with t is t-th cyclotomic polynomial
+            \Phi_{t}(x) that has all integer coefficients. So the answer is the remainder from
+            division of P(x) by \Phi_{t}(x), two polynomials with integer coefficients.
         */
 
         // Calculate cyclotomic polynomial.
@@ -351,29 +408,28 @@ main (
             c = c_;
         }
 
-#if VERBOSE
-        printf(" %.3f sec.\n", (double) (clock() - start_time) / CLOCKS_PER_SEC);
-        printf("Cyclotomic polynomial degree: %u.\n", cl);
-        printf("Dividing by cyclotomic polynomial...");
-        fflush(stdout);
-        time_ = start_time = clock();
-#endif
+        if (verbose) {
+            printf(" %.3f sec.\n", (double) (clock() - start_time) / CLOCKS_PER_SEC);
+            printf("Cyclotomic polynomial degree: %u.\n", cl);
+            printf("Dividing by cyclotomic polynomial...");
+            fflush(stdout);
+            time_ = start_time = clock();
+        }
 
         // Divide by cyclotomic polynomial. The answer is the remainder from that division.
+        // Polynomial division is optimized to take advantage of the fact that cyclotomic polynomial is monic.
 
         mpz_t* p = pp.p;
-        mpz_t a;
-        mpz_init(a);
         int pl = t - 1;
         while (pl >= cl) {
-#if VERBOSE
-            clock_t now = clock();
-            if (now - time_ > CLOCKS_PER_SEC * 0.1) {
-                printf("\rDividing by cyclotomic polynomial... %u / %u", t - 1 - pl, t - cl);
-                fflush(stdout);
-                time_ = now;
+            if (verbose) {
+                clock_t now = clock();
+                if (now - time_ > CLOCKS_PER_SEC * 0.1) {
+                    printf("\rDividing by cyclotomic polynomial... %u / %u", t - 1 - pl, t - cl);
+                    fflush(stdout);
+                    time_ = now;
+                }
             }
-#endif
             if (mpz_sgn(p[pl]) != 0) {
                 for (unsigned int j = 0; j <= cl; j++) {
                     if (c[j] == 1) {
@@ -392,15 +448,14 @@ main (
             }
             pl--;
         }
-        mpz_clear(a);
 
         if (c != c_) {
             free(c);
         }
 
-#if VERBOSE
-        printf("\rDividing by cyclotomic polynomial... %.3f sec.%10s\n", (double) (clock() - start_time) / CLOCKS_PER_SEC, "");
-#endif
+        if (verbose) {
+            printf("\rDividing by cyclotomic polynomial... %.3f sec.%10s\n", (double) (clock() - start_time) / CLOCKS_PER_SEC, "");
+        }
 
         if (m_min != m_max) {
             printf("%u\t", m);
@@ -410,6 +465,10 @@ main (
         }
         mpz_out_str(stdout, 10, p[0]);
         printf("\n");
+        if (output != NULL) {
+            mpz_out_str(output, 10, p[0]);
+            fprintf(output, "\n");
+        }
 
         for (unsigned int i = 0; i < t; i++) {
             mpz_clear(p1[i]);
@@ -422,5 +481,13 @@ main (
     for (int i = 0; i <= max_t; i++) free(cyclotomics[i]);
     free(cyclotomics);
 
+    if (verbose) {
+        printf("Total time: %.3f sec.\n", (double) (clock() - total_start_time) / CLOCKS_PER_SEC);
+    }
+
+    if (output != NULL) {
+        fclose(output);
+    }
+    
     return 0;
 }

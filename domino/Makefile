@@ -5,11 +5,14 @@ CFLAGS = -O3 -Wall -Werror
 CXX = g++
 CXXFLAGS = -O3 -Wall -Werror
 
-EXES = domino-dp domino-poly domino-ff
+EXES = domino-dp domino-poly domino-2d-ff domino-1d-ff
 
 all: $(EXES)
 
-domino-ff: domino-ff.c
+domino-1d-ff: domino-1d-ff.c
+	$(CC) $< -o $@ $(CFLAGS) -march=native -Xpreprocessor -fopenmp -I$(LIBOMPPATH)/include -L$(LIBOMPPATH)/lib -lgmp -lomp
+
+domino-2d-ff: domino-2d-ff.c
 	$(CC) $< -o $@ $(CFLAGS) -march=native -Xpreprocessor -fopenmp -I$(LIBOMPPATH)/include -L$(LIBOMPPATH)/lib -lgmp -lomp
 
 domino-poly: domino-poly.c

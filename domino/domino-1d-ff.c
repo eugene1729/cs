@@ -256,21 +256,21 @@ crt_combine (
     ) 
 
 {
-    mpz_t inv, t, P;
-    mpz_inits(inv, t, P, NULL);
+    mpz_t inv, t, p;
+    mpz_inits(inv, t, p, NULL);
     
     mpz_invert(inv, p0, p1); 
     mpz_sub(t, r1, r0);
     mpz_mul(t, t, inv);
     mpz_mod(t, t, p1); 
     
-    mpz_mul(P, p0, p1);
+    mpz_mul(p, p0, p1);
     mpz_mul(t, t, p0);
     mpz_add(r0, r0, t);
-    mpz_mod(r0, r0, P); 
+    mpz_mod(r0, r0, p); 
     
-    mpz_set(p0, P);
-    mpz_clears(inv, t, P, NULL);
+    mpz_set(p0, p);
+    mpz_clears(inv, t, p, NULL);
 }
 
 void 
@@ -387,6 +387,7 @@ main (
 
     if (n == 0) {
         printf("Usage: %s <N> <M> [--max <M_max>] [--verbose] [--skip-zeros] [--output <file name>]\n", argv[0]);
+        return 1;
     }
 
     if (m_min == 0) m_min = 1;
@@ -422,7 +423,7 @@ main (
         double start_time;
         if (verbose) start_time = omp_get_wtime();
 
-        // 1D logic only requires roots based on the smallest dimension!
+        // 1D logic only requires roots based on the smallest dimension.
         uint64_t k = (n < m) ? n : m;
         uint64_t l = 2 * (k + 1); 
         
@@ -444,7 +445,7 @@ main (
 
         #pragma omp parallel
         {
-            while (1) {
+            for (;;) {
                 // Check if we hit our target bits. 
                 // Using an atomic read prevents memory cache staleness across cores.
                 double current_bits;
@@ -454,26 +455,26 @@ main (
                 if (current_bits >= target_bits) break;
 
                 // Atomically claim the next candidate offset to test
-                uint64_t my_offset;
+                uint64_t offset;
                 #pragma omp atomic capture
-                my_offset = candidate_offset++;
+                offset = candidate_offset++;
                 
-                uint64_t p_candidate = base_candidate + my_offset * l;
+                uint64_t p_candidate = base_candidate + offset * l;
                 
-                // This is the heavy lifting. All threads do this concurrently!
+                // This is the heavy lifting. All threads do this concurrently.
                 if (is_prime(p_candidate)) {
                     
-                    // Atomically claim our index in the output array
-                    int my_index;
+                    // Atomically claim our index in the output array.
+                    int i;
                     #pragma omp atomic capture
-                    my_index = primes_found++;
+                    i = primes_found++;
                     
-                    mpz_set_ui(moduli[my_index], p_candidate);
+                    mpz_set_ui(moduli[i], p_candidate);
                     
-                    // Atomically add the bits we just discovered
-                    double my_bits = log2((double)p_candidate);
+                    // Atomically add the bits we just discovered.
+                    double bits = log2((double) p_candidate);
                     #pragma omp atomic
-                    collected_bits += my_bits;
+                    collected_bits += bits;
                 }
             }
         }
@@ -489,8 +490,8 @@ main (
 
         #pragma omp parallel for schedule(static)
         for (int i = 0; i < num_primes; i++) {
-            uint64_t p_val = mpz_get_ui(moduli[i]); 
-            uint64_t r = evaluate_kasteleyn_mod_p(n, m, p_val);
+            uint64_t p = mpz_get_ui(moduli[i]); 
+            uint64_t r = evaluate_kasteleyn_mod_p(n, m, p);
             mpz_set_ui(remainders[i], r);
 
             int current_completed;
@@ -506,13 +507,14 @@ main (
         if (verbose) {
             printf("\rEvaluated across %d threads. %d / %d primes. %.3f sec.%10s\n", max_threads, completed, num_primes, omp_get_wtime() - section_time, "");
             printf("Folding CRT tree...\r");
+            fflush(stdout);
             section_time = omp_get_wtime();
         }
         
         crt_tree(remainders, moduli, 0, num_primes - 1);
         
         if (verbose) {
-            printf("Folded CRT tree. %.3f sec.%10s\n", omp_get_wtime() - section_time, "");
+            printf("\rFolded CRT tree. %.3f sec.%10s\n", omp_get_wtime() - section_time, "");
             printf("Time: %.3f sec.%10s\n", omp_get_wtime() - start_time, "");
         }
 

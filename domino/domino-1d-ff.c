@@ -9,6 +9,7 @@
 
 typedef unsigned __int128 uint128_t;
 
+bool quiet;
 bool verbose;
 bool skip_zeros;
 
@@ -79,47 +80,6 @@ inv_mod (
 }
 
 //
-// Fast 2x2 Matrix Arithmetic modulo p
-//
-
-typedef struct {
-    uint64_t m[2][2];
-} mat2_t;
-
-mat2_t 
-mat2_mul_mod (
-    mat2_t a, 
-    mat2_t b, 
-    uint64_t p
-    ) 
-
-{
-    mat2_t c;
-    c.m[0][0] = add_mod(mul_mod(a.m[0][0], b.m[0][0], p), mul_mod(a.m[0][1], b.m[1][0], p), p);
-    c.m[0][1] = add_mod(mul_mod(a.m[0][0], b.m[0][1], p), mul_mod(a.m[0][1], b.m[1][1], p), p);
-    c.m[1][0] = add_mod(mul_mod(a.m[1][0], b.m[0][0], p), mul_mod(a.m[1][1], b.m[1][0], p), p);
-    c.m[1][1] = add_mod(mul_mod(a.m[1][0], b.m[0][1], p), mul_mod(a.m[1][1], b.m[1][1], p), p);
-    return c;
-}
-
-mat2_t 
-mat2_pow_mod (
-    mat2_t b, 
-    uint64_t e, 
-    uint64_t p
-    )
-
-{
-    mat2_t r = {{{1, 0}, {0, 1}}}; // Identity Matrix
-    while (e > 0) {
-        if (e % 2 == 1) r = mat2_mul_mod(r, b, p);
-        b = mat2_mul_mod(b, b, p);
-        e /= 2;
-    }
-    return r;
-}
-
-//
 // Primality Testing (Miller-Rabin)
 //
 
@@ -166,6 +126,7 @@ is_prime (
 // Number Theory Helpers
 //
 
+// Find k-th root of 1 modulo p. In other words, find element of order k modulo p.
 uint64_t 
 find_primitive_root (
     uint64_t k, 
@@ -206,6 +167,41 @@ find_primitive_root (
 // The O(K log N) 1D Kasteleyn Engine
 //
 
+// Returns Lucas number U(n+1) mod p, where U(0) = 0, U(1) = 1, and U(n) = a * U(n-1) + U(n-2) for n > 1.
+uint64_t 
+lucas_number (
+    uint64_t n, 
+    uint64_t a,
+    uint64_t p
+    ) 
+
+{
+    if (n == 0) return 1;
+
+    // Initialize U(k) and U(k+1) for k = 1
+    uint64_t uk = 1;
+    uint64_t uk1 = a;
+
+    for (int i = 62 - __builtin_clzll(n); i >= 0; i--) {
+        // Doubling step: compute U(2k) and U(2k+1)
+        uint64_t u2k  = ((uint128_t) uk * (((uint128_t) (2 * uk1) + ((uint128_t) (p - a) * uk)) % p)) % p;
+        uint64_t u2k1 = ((uint128_t) uk * uk + (uint128_t) uk1 * uk1) % p;
+
+        // Jump from k to either 2k or 2k+1 depending on the current bit
+        if ((n >> i) & 1) {
+            uint64_t u2k2 = ((uint128_t) a * u2k1 + u2k) % p;
+            uk  = u2k1;
+            uk1 = u2k2;
+        }
+        else {
+            uk  = u2k;
+            uk1 = u2k1;
+        }
+    }
+
+    return uk1;
+}
+
 uint64_t 
 evaluate_kasteleyn_mod_p (
     uint64_t n, 
@@ -234,23 +230,14 @@ evaluate_kasteleyn_mod_p (
     uint64_t k_half = k / 2;
     
     for (uint64_t j = 1; j <= k_half; j++) {
-        uint64_t two_a = v_curr; // This is 2*a_j = 2*cos(j*pi/(k+1))
-        
-        // Advance the Chebyshev sequence to prep for the next loop (V_j = 2cos(j \theta))
+
+        uint64_t factor = lucas_number(n_, v_curr, p);
+        r = mul_mod(r, factor, p);
+
+        // Advance the Chebyshev sequence to prep for the next loop (V_j = 2 cos(j \theta))
         uint64_t v_next = sub_mod(mul_mod(v1, v_curr, p), v_prev, p);
         v_prev = v_curr;
         v_curr = v_next;
-
-        // Build the transition matrix for the Lucas Sequence: M = [[2a, 1], [1, 0]]
-        mat2_t m = {{{two_a, 1}, {1, 0}}};
-        
-        // Raise to the power of N
-        mat2_t mn = mat2_pow_mod(m, n_, p);
-        
-        // The value U_{N+1} sits precisely in the top-left element
-        uint64_t u_n_plus_1 = mn.m[0][0];
-        
-        r = mul_mod(r, u_n_plus_1, p);
     }
 
     return r;
@@ -371,6 +358,10 @@ main (
             }
             else if (i < argc - 1 && (strcmp(arg, "-o") == 0 || strcmp(arg, "--output") == 0)) {
                 output_file_name = argv[++i];
+                continue;
+            }
+            else if (strcmp(arg, "-q") == 0 || strcmp(arg, "--quiet") == 0) {
+                quiet = 1;
                 continue;
             }
             else if (strcmp(arg, "-v") == 0 || strcmp(arg, "--verbose") == 0) {
@@ -525,9 +516,12 @@ main (
             printf("Time: %.3f sec.%10s\n", omp_get_wtime() - start_time, "");
         }
 
-        if (m_min != m_max) printf("%llu\t", m);
-        mpz_out_str(stdout, 10, remainders[0]);
-        printf("\n");
+        if (!quiet) {
+            if (m_min != m_max) printf("%llu\t", m);
+            mpz_out_str(stdout, 10, remainders[0]);
+            printf("\n");
+        }
+
         if (output != NULL) {
             mpz_out_str(output, 10, remainders[0]);
             fprintf(output, "\n");

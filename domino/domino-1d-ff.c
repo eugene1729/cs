@@ -114,8 +114,9 @@ is_prime (
     uint64_t d = p - 1;
     while (d % 2 == 0) d /= 2;
     
-    static const uint64_t bases[] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37};
-    for (int i = 0; i < 12; i++) {
+    // 7 bases is sufficient for Miller-Rabin test up to 2^64.
+    static const uint64_t bases[] = {2, 325, 9375, 28178, 450775, 9780504, 1795265022};
+    for (int i = 0; i < 7; i++) {
         if (p <= bases[i]) break;
         if (!miller_rabin_test(d, p, bases[i])) return false;
     }
@@ -498,7 +499,7 @@ main (
             #pragma omp atomic capture
             current_completed = ++completed;
             
-            if (verbose && current_completed % 100 == 0) {
+            if (verbose && current_completed % 1000 == 0) {
                 printf("Evaluating across %d threads. %d / %d primes...\r", max_threads, current_completed, num_primes);
                 fflush(stdout);
             }

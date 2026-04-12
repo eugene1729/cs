@@ -1,8 +1,9 @@
+LIBOMPPATH = /opt/homebrew/opt/libomp
 CXX = g++
-CXXFLAGS = -O3 -Wall -Werror
-LIBS = -lgmp -lgmpxx
+CXXFLAGS = -O3 -Wall -Werror -Xpreprocessor -fopenmp -I$(LIBOMPPATH)/include -L$(LIBOMPPATH)/lib
+LIBS = -lgmp -lgmpxx -lomp
 
-EXES = maze recurrence
+EXES = maze maze-low-memory
 
 all: $(EXES)
 
@@ -10,4 +11,4 @@ all: $(EXES)
 	$(CXX) $< -o $@ $(CXXFLAGS) $(LIBS)
 
 clean:
-	rm $(EXES)
+	@rm $(EXES)

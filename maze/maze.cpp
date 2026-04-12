@@ -397,7 +397,7 @@ main (
 
         clock_t time = clock();
         if (time > time_ + CLOCKS_PER_SEC / 5) {
-            std::cout << "Building transfer matrices. Processed depth layer of size " << current_frontier.size() << ".        \r" << std::flush;
+            std::cout << "Building transfer matrices. Processed depth layer of size " << current_frontier.size() << "." << std::setw(80) << "" << "\r" << std::flush;
             time_ = time;
         }
     }
@@ -406,7 +406,7 @@ main (
     pairs[VERTICAL].shrink_to_fit();
     xsi_final.shrink_to_fit();
     uint dim = xs_index.size();
-    std::cout << "\nBuilt " << dim << " × " << dim << " transfer matrices. Nonzeros: " << total_num_pairs << "." << std::endl;
+    std::cout << "Built " << dim << " × " << dim << " transfer matrices. Nonzeros: " << total_num_pairs << "." << std::setw(80) << "" << std::endl;
 
     // --- PHASE 2: GRAPH TRANSPOSITION ---
     // We reverse the edges so threads can pull data lock-free

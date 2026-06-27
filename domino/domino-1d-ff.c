@@ -316,9 +316,8 @@ calculate_target_bits (
         double c_bar_j = a_j - sqrt(1.0 + a_j * a_j);
         
         if (n_ < 500) {
-            // Safe to compute natively
-            double u = (pow(c_j, n_ + 1) - pow(c_bar_j, n_ + 1)) / (c_j - c_bar_j);
-            exact_bits += log2(u);
+            // Safe to compute natively.
+            exact_bits += log2((pow(c_j, n_ + 1) - pow(c_bar_j, n_ + 1)) / (c_j - c_bar_j));
         } 
         else {
             // For large N, bar_c_j approaches 0. Using logarithmic arithmetic 
@@ -381,7 +380,11 @@ main (
             continue;
         }
         else if (m_min == 0) {
-            m_max = m_min = strtoull(arg, NULL, 10);
+            m_min = strtoull(arg, NULL, 10);
+            continue;
+        }
+        else if (m_max == 0) {
+            m_max = strtoull(arg, NULL, 10);
             continue;
         }
     }
@@ -391,8 +394,8 @@ main (
         return 1;
     }
 
-    if (m_min == 0) m_min = 1;
-    if (m_max == 0) m_max = 1000;
+    if (m_min == 0) m_min = n;
+    if (m_max == 0) m_max = m_min;
 
     FILE* output = NULL;
     if (output_file_name != NULL) {
@@ -401,6 +404,11 @@ main (
 
     double total_start_time;
     if (verbose) total_start_time = omp_get_wtime();
+
+    if (verbose) {
+        printf("Determining the number of primes needed...");
+        fflush(stdout);
+    }
 
     int max_threads = omp_get_max_threads();
     int max_primes = (int)(calculate_target_bits(n, m_max) / 62.0) + max_threads + 10;
@@ -412,6 +420,13 @@ main (
     }
 
     for (uint64_t m = m_min; m <= m_max; m++) {
+
+        if (verbose) {
+            printf("\r%-80s\r", "");
+            fflush(stdout);
+            printf("Calculating for %llu × %llu.\n", n, m);
+        }
+
         if (n % 2 == 1 && m % 2 == 1) {
             if (!skip_zeros) {
                 if (m_min != m_max) printf("%llu\t", m);

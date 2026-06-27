@@ -5,21 +5,24 @@ CFLAGS = -O3 -Wall -Werror
 CXX = g++
 CXXFLAGS = -O3 -Wall -Werror
 
-EXES = domino-dp domino-poly domino-2d-ff domino-1d-ff
+EXES = domino-dp domino-bm domino-poly domino-2d-ff domino-1d-ff
 
 all: $(EXES)
 
-domino-1d-ff: domino-1d-ff.c
-	$(CC) $< -o $@ $(CFLAGS) -march=native -Xpreprocessor -fopenmp -I$(LIBOMPPATH)/include -L$(LIBOMPPATH)/lib -lgmp -lomp
+domino-dp: domino-dp.cpp
+	$(CXX) $< -o $@ $(CXXFLAGS) -lgmp -lgmpxx
 
-domino-2d-ff: domino-2d-ff.c
-	$(CC) $< -o $@ $(CFLAGS) -march=native -Xpreprocessor -fopenmp -I$(LIBOMPPATH)/include -L$(LIBOMPPATH)/lib -lgmp -lomp
+domino-bm: domino-bm.c
+	$(CC) $< -o $@ $(CFLAGS) -lgmp
 
 domino-poly: domino-poly.c
 	$(CC) $< -o $@ $(CFLAGS) -lgmp
 
-domino-dp: domino-dp.cpp
-	$(CXX) $< -o $@ $(CXXFLAGS) -lgmp -lgmpxx
+domino-2d-ff: domino-2d-ff.c
+	$(CC) $< -o $@ $(CFLAGS) -march=native -Xpreprocessor -fopenmp -I$(LIBOMPPATH)/include -L$(LIBOMPPATH)/lib -lgmp -lomp
+
+domino-1d-ff: domino-1d-ff.c
+	$(CC) $< -o $@ $(CFLAGS) -march=native -Xpreprocessor -fopenmp -I$(LIBOMPPATH)/include -L$(LIBOMPPATH)/lib -lgmp -lomp
 
 .PHONY: clean
 
